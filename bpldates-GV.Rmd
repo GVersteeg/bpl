@@ -1,0 +1,165 @@
+---
+title: "draw_bias"
+author: "Sam Vermeerssen"
+date: "January 5, 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+
+fname_in <- "data/17-18 scores.csv"
+
+```
+
+## Inlezen data
+
+```{r getting data}
+
+LST <- list()
+indir <- "data/"
+
+ofs <- 1992
+n <- c(1993:1998)
+for (i in n) {
+  y1 <- i-1900
+  y2 <- y1+1
+  LST[[i-ofs]] <- as_tibble(read.csv2(paste0(indir,y1,"-",y2," scores.csv"), 
+                                      sep = ",", header = TRUE,
+                                      colClasses = "character"))
+}
+
+ofs <- 1992
+n <- c(1999)
+for (i in n) {
+  y1 <- i-1900
+  y2 <- y1+1
+  LST[[i-ofs]] <- as_tibble(read.csv2(paste0(indir,y1,"-","00"," scores.csv"), 
+                                      sep = ",", header = TRUE,
+                                      colClasses = "character"))
+}
+
+ofs <- 1992
+n <- c(2000:2008)
+for (i in n) {
+  y1 <- i-2000
+  y2 <- y1+1
+  LST[[i-ofs]] <- as_tibble(read.csv2(paste0(indir,"0",y1,"-","0",y2," scores.csv"), 
+                                      sep = ",", header = TRUE,
+                                      colClasses = "character"))
+}
+
+ofs <- 1992
+n <- c(2009)
+for (i in n) {
+  y1 <- i-2000
+  y2 <- y1+1
+  LST[[i-ofs]] <- as_tibble(read.csv2(paste0(indir,"0",y1,"-","10"," scores.csv"), 
+                                      sep = ",", header = TRUE,
+                                      colClasses = "character"))
+}
+
+ofs <- 1992
+n <- c(2010:2017)
+for (i in n) {
+  y1 <- i-2000
+  y2 <- y1+1
+  LST[[i-ofs]] <- as_tibble(read.csv2(paste0(indir,y1,"-",y2," scores.csv"), 
+                                      sep = ",", header = TRUE,
+                                      colClasses = "character"))
+}
+```
+
+## Vullen standaard dataframe met verschillende jaren en formaten
+
+```{r vullen standaard dataframe}
+# read all 25 dataframes from list and add to standard dataframe
+n <- c(1:25)
+for (i in n) {
+  temp <- LST[[i]] %>%
+    select(Div, Date, HomeTeam, AwayTeam, FTHG, FTAG, FTR)
+  for (j in c(1:ncol(temp))) {
+    temp[temp[,j]=="",j] <- NA
+    }
+  nas <- which(complete.cases(temp)==TRUE)
+  temp <- temp[nas,]
+  if (i == 1) {df_std <- temp}
+  if (i > 1) {df_std <- rbind(df_std, temp)}
+}
+```
+
+## cleaning the dataframe
+
+```{r cleaning data}
+# add a column for a Posixlt date
+df1 <- df_std %>% 
+  mutate(numdate = as.Date(Date,"%d/%m/%Y"))
+
+# correct for years in Date-column that are YY instead of YYYY
+table(year(df1$numdate))
+year(df1$numdate) <- ifelse(year(df1$numdate) < 50, 
+                            2000 + year(df1$numdate), year(df1$numdate))
+year(df1$numdate) <- ifelse(year(df1$numdate) < 1000 & year(df1$numdate) > 90, 
+                            1900 + year(df1$numdate),year(df1$numdate))
+table(year(df1$numdate))
+```
+
+## Frequencies of draws during Xmas
+
+```{r freq of draws}
+# add a column that indicates games played during the X-mas period
+df2 <- df1 %>%
+  mutate(xmas = ifelse((month(numdate) == 12 & day(numdate) > 19), "1",
+                       ifelse((month(numdate) == 1 & day(numdate) < 11), "1", "0")))
+# check number of games played during Xmas vs. the rest of the year
+table(df2$xmas)
+
+# check number of draws during Xmas vs. the rest of the year
+table(df2$xmas, df2$FTR)
+
+# check percentage of draws during Xmas vs. the rest of the year
+df3 <- df2 %>%
+  group_by(xmas, FTR) %>%
+  count(FTR) %>%
+  ungroup() %>%
+  group_by(xmas) %>%
+  mutate(perc=round(n/sum(n)*100,digits=2))
+df3
+
+```
+
+## PLot Frequencies of draws during Xmas
+
+```{r plot of draws}
+# check percentage of draws during Xmas vs. the rest of the year
+df4 <- df2 %>%
+  mutate(jaar = year(numdate)) %>%
+  group_by(xmas, jaar, FTR) %>%
+  count(FTR) %>%
+  ungroup() %>%
+  group_by(xmas, jaar) %>%
+  mutate(perc=round(n/sum(n)*100,digits=2))
+df4
+qplot(jaar, perc, data=df4, facets = .~xmas, color = FTR)
+```
+
+
+## Frequencies
+
+```{r freq 1}
+table(df2$FTR)
+table(df2$HomeTeam, df2$FTR)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
